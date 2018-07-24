@@ -1,0 +1,417 @@
+---
+output: pdf_document
+author: "Liting Hu"
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+
+
+# FE590.  Assignment #2.
+
+## `r format(Sys.time(), "%Y-%m-%d")`
+
+# Instructions
+In this assignment, you should use R markdown to answer the questions below. Simply type your R code into embedded chunks as shown above.
+When you have completed the assignment, knit the document into a PDF file, and upload both the .pdf and .Rmd files to Canvas.
+
+# Question 1 (based on JWHT Chapter 2, Problem 9)
+Use the Auto data set from the textbook's website. When reading the data, use the options as.is = TRUE
+and na.strings="?". Remove the unavailable data using the na.omit() function.
+
+```{r}
+library(ISLR)
+setwd("/Users/apple/Desktop/590")
+auto <- read.csv("Auto.csv", as.is = T, na.strings = "?")
+auto <- na.omit(auto)
+```
+
+
+## 1. List the names of the variables in the data set.
+
+```{r}
+colnames(auto)
+```
+
+
+## 2. The columns origin and name are unimportant variables. Create a new data frame called cars that contains none of these unimportant variables
+
+```{r}
+cars <- subset(auto, select = -c(origin, name))
+```
+
+## 3. What is the range of each quantitative variable? Answer this question using the range() function with the sapply() function (e.g., sapply(cars, range). Print a simple table of the ranges of the variables. The rows should correspond to the variables. The first column should be the lowest value of the corresponding variable, and the second column should be the maximum value of the variable. The columns should be suitably labeled.
+
+```{r}
+car.range <- sapply(cars, range)
+car.range <- t(car.range)
+colnames(car.range) <- c("min", "max")
+```
+
+```{r results = 'asis'}
+knitr::kable(car.range, caption = "The variable ranges of Cars")
+```
+
+## 4. What is the mean and standard deviation of each variable? Create a simple table of the means and standard deviations.
+
+```{r}
+vector.m <- sapply(cars, mean)
+vector.sd <- sapply(cars, sd)
+md <- rbind(vector.m, vector.sd)
+md <- t(md)
+colnames(md) <- c("mean", "standard_deviation")
+```
+
+```{r results = 'asis'}
+knitr::kable(md, caption = "Means and SD of Cars")
+```
+
+## 5. Create a scatterplot matrix that includes the variables mpg, displacement, horsepower, weight, and acceleration using the pairs() function.
+
+```{r}
+newdf <- subset(cars, select = c(mpg, displacement,horsepower, weight, acceleration))
+pairs(newdf)
+```
+
+## 6. From the scatterplot, it should be clear that mpg has an almost linear relationship to predictors, and higher-order relationships to other variables. Using the regsubsets function in the leaps library, regress mpg onto
+
+\begin{itemize}
+
+\item displacement
+\item displacement squared
+\item horsepower
+\item horsepower squared 
+\item weight
+\item weight squared
+\item acceleration
+
+\end{itemize}
+
+```{r}
+library(leaps)
+attach(newdf)
+newdf$displacement_squared <- displacement^2
+newdf$horsepower_squared <- horsepower^2
+newdf$weight_squared <- weight^2
+detach(newdf)
+
+m <- regsubsets(mpg~., data = newdf)
+regs <- t(summary(m)$which)
+```
+
+Print a table showing what variables would be selected using best subset selection for all model orders.
+```{r results = 'asis'}
+knitr::kable(regs, caption = "Selections of variables")
+```
+
+What is the most important variable affecting fuel consumption?
+
+```{r}
+rownames(as.data.frame(coef(m, 1)))[2]
+```
+
+What is the second most important variable affecting fuel consumption?
+
+```{r}
+rownames(as.data.frame(coef(m, 2)))[3]
+```
+
+What is the third most important variable affecting fuel consumption?
+
+```{r}
+rownames(as.data.frame(coef(m, 3)))[4]
+```
+
+## 7. Plot a graph showing Mallow's Cp as a function of the order of the model. Which model is the best?
+
+```{r}
+cp=summary(m)$cp
+i=which.min(cp)
+plot(cp,type='b',col="blue",xlab="Number of Predictors",ylab=expression("Mallows C"[P]))
+points(i,cp[i],pch=19,col="red")
+```
+
+The Mallow's Cp takes its minimum when the number of predictors is 6.
+
+```{r}
+best_model <- summary(regsubsets(mpg~., data = newdf, nvmax = 6))$which
+t(best_model[6,])
+# The best model
+```
+
+
+# Question 2 (based on JWHT Chapter 3, Problem 10)
+
+This exercise involves the Boston housing data set.
+
+## 1. Load in the Boston data set, which is part of the MASS library in R. The data set is contained in the object Boston. Read about the data set using the command ?Boston. How many rows are in this data set? How many columns? What do the rows and columns represent?
+
+```{r}
+library(MASS)
+?Boston
+```
+There are 506 rows and 14 columns in the object Boston. Each row is an observation. For columns:
+
+crim: 
+per capita crime rate by town.
+
+zn: 
+proportion of residential land zoned for lots over 25,000 sq.ft.
+
+indus: 
+proportion of non-retail business acres per town.
+
+chas: 
+Charles River dummy variable (= 1 if tract bounds river; 0 otherwise).
+
+nox: 
+nitrogen oxides concentration (parts per 10 million).
+
+rm: 
+average number of rooms per dwelling.
+
+age: 
+proportion of owner-occupied units built prior to 1940.
+
+dis: 
+weighted mean of distances to five Boston employment centres.
+
+rad: 
+index of accessibility to radial highways.
+
+tax: 
+full-value property-tax rate per \$10,000.
+
+ptratio: 
+pupil-teacher ratio by town.
+
+black: 
+1000(Bk - 0.63)^2 where Bk is the proportion of blacks by town.
+
+lstat: 
+lower status of the population (percent).
+
+medv: 
+median value of owner-occupied homes in \$1000s.
+
+## 2. Do any of the suburbs of Boston appear to have particularly high crime rates?
+
+
+```{r}
+summary(Boston)
+```
+From the summry, we can see a wide range of crim rate (0.00632\% - 88.97620\%). However the mean and 3rd quantile is relatively low which indicate most parts of suburbs are save and other parts are very dangerous. 
+
+Tax rates?
+
+The range of tax rate is 187\% to 711\% which is also quite large.
+
+Pupil-teacher ratios?
+
+Pupil-teacher ranges from 12.6\% to 22\% which is relatively low compared to former two indicators.
+
+Comment on the range of each predictor.
+
+## 3. How many of the suburbs in this data set bound the Charles river?
+
+```{r}
+sum(Boston$chas)
+```
+
+## 4. What is the median pupil-teacher ratio among the towns in this data set?
+
+```{r}
+median(Boston$ptratio)
+```
+
+
+## 5. In this data set, how many of the suburbs average more than seven rooms per dwelling?
+
+```{r}
+sum(Boston$rm > 7)
+```
+
+More than eight rooms per dwelling?
+
+```{r}
+sum(Boston$rm > 8)
+```
+
+Comment on the suburbs that average more than eight rooms per dwelling.
+
+```{r}
+summary(subset(Boston, rm > 8))
+```
+Compared to other suburbs, these suburbs that average more than eight rooms per dwelling have more lower status of the population (lstat).
+
+# Question 3 (based on JWHT Chapter 4, Problem 10)
+
+This question should be answered using the Weekly data set, which is part of the ISLR package. This data contains 1,089 weekly returns for 21 years, from the beginning of 1990 to the end of 2010.
+
+## 1. What does the data represent?
+
+```{r}
+library(ISLR)
+?Weekly
+```
+
+The data represents weekly percentage returns for the S&P 500 stock index between 1990 and 2010.
+
+Year:
+The year that the observation was recorded
+
+Lag1:
+Percentage return for previous week
+
+Lag2:
+Percentage return for 2 weeks previous
+
+Lag3:
+Percentage return for 3 weeks previous
+
+Lag4:
+Percentage return for 4 weeks previous
+
+Lag5:
+Percentage return for 5 weeks previous
+
+Volume:
+Volume of shares traded (average number of daily shares traded in billions)
+
+Today:
+Percentage return for this week
+
+Direction:
+A factor with levels Down and Up indicating whether the market had a positive or negative return on a given week 
+
+## 2. Use the full data set to perform a logistic regression with Direction as the response and the five lag variables plus Volume as predictors. Use the summary function to print the results. Do any of the predictors appear to be statistically significant? If so, which ones?
+
+```{r}
+attach(Weekly)
+glm.fit <- glm(Direction ~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5 + Volume, family=binomial)
+summary(glm.fit)
+detach(Weekly)
+```
+The predictor "Lag2" is statistically significant.
+
+## 3. Fit a logistic regression model using a training data period from 1990 to 2008, with Lag2 as the only predictor. Compute the confusion matrix and the overall fraction of correct predictions for the held out data (that is, the data from 2009 and 2010).
+
+
+```{r}
+Weekly.train <- subset(Weekly, Year <= 2008)
+Weekly.test <- subset(Weekly, Year > 2008)
+fit <- glm(Direction ~ Lag2, data = Weekly.train, family = binomial)
+glm.probs <- predict(fit, Weekly.test, type ="response")
+
+glm.pred <- rep("Down", nrow(Weekly.test))
+glm.pred[glm.probs >.5] <- "Up"
+
+table(glm.pred, Weekly.test$Direction)
+glm.ratio <- mean(glm.pred == Weekly.test$Direction)
+glm.ratio
+```
+
+The fraction of correct predictions is 0.625.
+
+## 4. Repeat Part 3 using LDA.
+
+```{r}
+lda.fit <- lda(Direction ~ Lag2, data = Weekly.train)
+lda.pred <- predict(lda.fit, Weekly.test)
+lda.class <- lda.pred$class
+
+
+table(lda.class, Weekly.test$Direction)
+lda.ratio <- mean(lda.class == Weekly.test$Direction)
+lda.ratio
+```
+The fraction of correct predictions is 0.625.
+
+## 5. Repeat Part 3 using QDA.
+
+```{r}
+qda.fit <- qda(Direction ~ Lag2, data = Weekly.train)
+qda.pred <- predict(qda.fit, Weekly.test)
+qda.class <- qda.pred$class
+
+table(qda.class, Weekly.test$Direction)
+qda.ratio <- mean(qda.class == Weekly.test$Direction)
+qda.ratio
+```
+The fraction of correct predictions is 0.587.
+
+## 6. Repeat Part 3 using KNN with K = 1, 2, 3.
+
+```{r}
+library (class)
+direction <- Weekly.train$Direction
+Train.knn <- as.matrix(Weekly.train[, 3])
+Test.knn <- as.matrix(Weekly.test[, 3])
+
+knn.pred1 <- knn(Train.knn, Test.knn, direction, k = 1)
+table(knn.pred1, Weekly.test$Direction)
+knn1.ratio <- mean(knn.pred1 == Weekly.test$Direction)
+knn1.ratio
+
+knn.pred2 <- knn(Train.knn, Test.knn, direction, k = 2)
+table(knn.pred2, Weekly.test$Direction)
+knn2.ratio <- mean(knn.pred2 == Weekly.test$Direction)
+knn2.ratio
+
+knn.pred3 <- knn(Train.knn, Test.knn, direction, k = 3)
+table(knn.pred3, Weekly.test$Direction)
+knn3.ratio <- mean(knn.pred3 == Weekly.test$Direction)
+knn3.ratio
+```
+
+## 7. Which of these methods in Parts 3, 4, 5, and 6 appears to provide the best results on this data?
+
+```{r}
+method <- data.frame(glm.ratio, lda.ratio, qda.ratio, knn1.ratio, knn2.ratio, knn3.ratio)
+```
+```{r results = 'asis'}
+knitr::kable(method)
+```
+
+The logistic regression model and LDA model provide the best results on this data.
+
+# Question 4
+
+## Write a function that works in R to gives you the parameters from a linear regression on a data set between two sets of values (in other words you only have to do the 2-D case).  Include in the output the standard error of your variables.  You cannot use the lm command in this function or any of the other built in regression models.  For example your output could be a 2x2 matrix with the parameters in the first column and the standard errors in the second column.  For up to 5 bonus points, format your output so that it displays and operates similar in function to the output of the lm command.(i.e. in a data frame that includes all potentially useful outputs)
+
+
+```{r}
+linear.regression <- function(data1, data2) {
+    m1 <- mean(data1) # means of data
+    m2 <- mean(data2)
+    n <- length(data1)
+    b <- (sum(data1*data2) - n*m1*m2)/(sum(data1^2) - n*m1^2)
+    a <- m2 - b*m1
+    data2.hat <- a + b*data1
+    epsilon <- data2.hat - data2
+    se.b <- sqrt(n*sum(epsilon^2)/(n-2)/(n*sum(data1^2)-(sum(data1))^2))
+    se.a <- se.b*sqrt(sum(data1^2)/n)
+    t.b <- b/se.b
+    t.a <- a/se.a
+    pr.b <- dt(t.b, n-2)
+    pr.a <- dt(t.a, n-2)
+    
+    Estimate <- c(a, b)
+    Std.Error <- c(se.a, se.b)
+    t_value <- c(t.a, t.b)
+    Pr <- c(pr.a, pr.b)
+    df <- data.frame(Estimate, Std.Error, t_value, Pr)
+    rownames(df) <- c("(Intercept)","slope")
+    return(df)
+}
+linear.regression(Weekly$Lag1, Weekly$Lag2)
+```
+
+## Compare the output of your function to that of the lm command in R.
+
+```{r}
+LG <- lm(Lag1 ~ Lag2, data = Weekly)
+summary(LG)
+```

@@ -1,0 +1,233 @@
+---
+output: pdf_document
+---
+
+# FE590.  Assignment #4.
+
+
+## Enter Your Name Here, or "Anonymous" if you want to remain anonymous..
+## `r format(Sys.time(), "%Y-%m-%d")`
+
+
+# Instructions
+
+
+When you have completed the assignment, knit the document into a PDF file, and upload _both_ the .pdf and .Rmd files to Canvas.
+
+Note that you must have LaTeX installed in order to knit the equations below.  If you do not have it installed, simply delete the questions below.
+
+# Question 1:
+In this assignment, you will be required to find a set of data to run regression on.  This data set should be financial in nature, and of a type that will work with the models we have discussed this semester (hint: we didn't look at time series)  You may not use any of the data sets in the ISLR package that we have been looking at all semester.  Your data set that you choose should have both qualitative and quantitative variables. (or has variables that you can transform)
+
+Provide a description of the data below, where you obtained it, what the variable names are and what it is describing.
+
+```{r}
+library(MASS)
+library(class)
+library(leaps)
+library(boot)
+library(randomForest)
+library(gbm)
+library(tree)
+
+setwd("/Users/apple/Desktop/590/H4")
+creditcard <- read.csv("creditcard.csv")
+head(creditcard)
+```
+
+The datasets contains transactions made by credit cards in September 2013 by european cardholders. This dataset presents transactions that occurred in two days, where we have 492 frauds out of 284,807 transactions. The dataset is highly unbalanced, the positive class (frauds) account for 0.172% of all transactions.
+
+Variables in this dataset:
+
+Time: How many times this card has been used.
+
+V1 to V28 are principal components obtained with PCA transformation
+
+Amount: Transaction Amount
+
+Class: The actual classification classes. It takes value 1 in case of fraud and 0 otherwise.
+
+Ref: https://www.kaggle.com/dalpozz/creditcardfraud
+
+
+# Question 2:
+Pick a quantitative variable and fit at least four different models in order to predict that variable using the other predictors.  Determine which of the models is the best fit.  You will need to provide strong reason why the particular model you chose is the best one.  You will need to confirm the model you have selected provides the best fit and that you have obtained the best version of that particular model (i.e. subset selection or validation for example).  You need to convince the grader that you have chosen the best model.
+```{r}
+n <- nrow(creditcard) # there are n records
+
+# Arrange this dataset in a random order
+set.seed(1)
+d <- 50000 # select 50000 samples
+random.order <- sample(seq(1,n), d)
+creditcardsub <- creditcard[random.order, ]
+
+# Divide dataset into two group: Training data and test data
+training <- creditcardsub[seq(1, d/2), ]
+test <- creditcardsub[seq(d/2+1, d), ]
+```
+
+```{r}
+# The quantitative variable I chose is Amount
+training1 <- training[,-31]
+test1 <- test[,-31]
+
+# 1. Best subset selection + logistic regression
+m <- regsubsets(Amount~., data = training1, nvmax=30) 
+regs <- t(summary(m)$which)
+
+cp <- summary(m)$cp
+i <- which.min(cp)
+plot(cp,type='b',col="blue",
+     xlab="Number of Predictors",ylab=expression("Mallows C"[P]))
+points(i,cp[i],pch=19,col="red")
+
+# Cause the Cps after n=15 are low enough. For simplicity, I chose number of predictors as 18.
+
+regs[, 18]
+
+# Select subsets
+training2 <- training1[, -c(1, 12, 13, 14, 16, 17, 18, 25, 27, 28, 29)]
+test2 <- test1[, -c(1, 12, 13, 14, 16, 17, 18, 25, 27, 28, 29)]
+glm.fit <- glm(Amount~., data = training2) 
+glm.pred <- predict(glm.fit, test2, type ="response")
+MSE.glm <- mean((test2$Amount - glm.pred)^2)
+
+# 2. Linear Discriminant Analysis
+lda.fit <- lda(Amount~., data=training2)
+lda.pred <- predict(lda.fit, test2, type ="response")
+lda.x <- lda.pred$x
+MSE.lda <- mean((test2$Amount - lda.x)^2)
+
+# 3. Decision tree
+tree.credit <- tree(Amount~.,training2)
+summary(tree.credit)
+
+plot(tree.credit)
+text(tree.credit ,pretty=0)
+
+cv.credit=cv.tree(tree.credit)
+plot(cv.credit$size ,cv.credit$dev ,type='b')
+# Doesn't need to prune
+tree.pred <- predict(tree.credit, newdata=test2)
+MSE.tree <- mean((test2$Amount - tree.pred)^2)
+
+# 4. Knn
+amount <- training1$Amount
+train.knn <- as.matrix(training1[, -30])
+test.knn <- as.matrix(test1[, -30])
+
+knn.pred1 <- knn(train.knn, test.knn, amount, k = 1)
+knn.pred2 <- knn(train.knn, test.knn, amount, k = 2)
+knn.pred3 <- knn(train.knn, test.knn, amount, k = 3)
+knn.pred1 <- as.numeric(as.vector(knn.pred1))
+knn.pred2 <- as.numeric(as.vector(knn.pred2))
+knn.pred3 <- as.numeric(as.vector(knn.pred3))
+MSE.knn1 <- mean((test2$Amount - knn.pred1)^2)
+MSE.knn2 <- mean((test2$Amount - knn.pred2)^2)
+MSE.knn3 <- mean((test2$Amount - knn.pred3)^2)
+
+data.frame(MSE.glm, MSE.lda, MSE.tree, MSE.knn1, MSE.knn2, MSE.knn3)
+```
+
+Among these method, the lowest MSE appears in logistic regression. In fact, amount in every transaction tends to be randomly depending on clients' usage. That may be why the MSE is so large.
+
+#Question 3:
+
+Do the same approach as in question 2, but this time for a qualitative variable.
+```{r}
+# The qualitative variable I chose is Class
+Testclass <- table(test$Class)
+Testclass
+
+# Baseline accuracy
+Testclass[1]/sum(Testclass)
+
+
+# 1. Logistic Regression
+glm.fit <- glm(Class~., data=training, family="binomial")
+summary(glm.fit)
+
+glm.probs <- predict(glm.fit, test, type ="response")
+
+glm.pred <- rep(0, dim(test)[1])
+glm.pred[glm.probs >.5] <- 1
+table(test$Class, glm.pred)
+Ac.glm <- mean(test$Class == glm.pred)
+# 0.99916
+
+# 2. Linear Discriminant Analysis
+lda.fit <- lda(Class~., data=training)
+plot(lda.fit)
+
+lda.pred <- predict(lda.fit, test)
+lda.class <- lda.pred$class
+table(test$Class, lda.class)
+Ac.lda <- mean(test$Class == lda.class)
+# 0.99936
+
+# 3. Quadratic Discriminant Analysis
+qda.fit <- qda(Class~., data=training)
+
+qda.pred <- predict(qda.fit, test)
+qda.class <- qda.pred$class
+table(test$Class, qda.class)
+Ac.qda <- mean(test$Class == qda.class)
+# 0.99468
+
+# 4. K-Nearest Neighbors
+class <- training$Class
+train.knn <- as.matrix(training[, seq(1,30)])
+test.knn <- as.matrix(test[, seq(1,30)])
+
+knn.pred1 <- knn(train.knn, test.knn, class, k = 1)
+knn.pred2 <- knn(train.knn, test.knn, class, k = 2)
+knn.pred3 <- knn(train.knn, test.knn, class, k = 3)
+table(test$Class, knn.pred1)
+Ac.knn1 <- mean(test$Class == knn.pred1)
+# 0.99732
+table(test$Class, knn.pred2)
+Ac.knn2 <- mean(test$Class == knn.pred2)
+# 0.99716
+table(test$Class, knn.pred3)
+Ac.knn3 <- mean(test$Class == knn.pred3)
+# 0.9984
+
+
+```
+Accuracy of predictions:
+```{r}
+data.frame(Ac.glm, Ac.lda, Ac.qda, Ac.knn1, Ac.knn2, Ac.knn3)
+```
+Since the dataset is highly unbalanced, all the accuracy is very high. But only logestic regression and LDA's accuracy surpass the baseline accuracy. It turns out that LDA has the highest accuracy rate.
+
+#Question 4:
+
+For the Boston data set, fit a tree trying to predict crime (crim) based on all of the other variables.  This should be the best tree that you can fit (you should try bumping, bagging, and boosting to ensure this).
+```{r}
+# bag tree function
+bag_function <- function(Boston,index){
+    bag.boston <- randomForest(crim~., data = Boston, subset=index,
+                               mtry=13,importance=TRUE)
+    boston.bag <- predict(bag.boston,newdata=Boston[-index,])
+    boston.test <- Boston[-index,"crim"]
+    return(mean(boston.bag))
+} 
+
+#boost tree function
+boost_function <- function(Boston,train){
+    boost.boston <-gbm(crim~., data=Boston[train,],distribution = "gaussian",
+                       n.trees = 5000,interaction.depth = 4)
+    boston.boost <-predict(boost.boston,newdata=Boston[-train,],n.trees=5000)
+    boston.test <- Boston[-train,"crim"]
+    return(mean(boston.test))  
+}
+```
+
+Determine your error rate
+```{r}
+result_bag  <- boot(data=Boston,statistic = bag_function,R=100)
+result_boost <- boot(data=Boston,statistic = boost_function,R=100)
+result_bag
+result_boost
+```
+The standard error of bagging (0.4822616) is a little lower than boosting (0.4987222).
